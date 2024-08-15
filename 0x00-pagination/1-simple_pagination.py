@@ -1,6 +1,10 @@
 import csv
 import math
 from typing import List, Tuple
+"""
+Adds `get_page` method to `Server` class
+"""
+
 
 def index_range(page: int, page_size: int) -> Tuple[int, int]:
     """
