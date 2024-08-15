@@ -1,48 +1,54 @@
 #!/usr/bin/python3
-""" Create LFUCache class that inherits from BaseCaching """
+"""LFU Cache Replacement Implementation Class
+"""
+from threading import RLock
+
 BaseCaching = __import__('base_caching').BaseCaching
 
 
 class LFUCache(BaseCaching):
-    """ Define LFUCache """
+    """
+    An implementaion of LFUCache(Least frequently used)
 
+    Attributes:
+        __stats (list): A dictionary of cache keys for access count
+        __rlock (RLock): Lock accessed resources to prevent race condition
+    """
     def __init__(self):
-        """ Initialize LFUCache """
-        self.queue = []
-        self.lfu = {}
+        """ Instantiation method, sets instance attributes
+        """
         super().__init__()
+        self.__stats = {}
+        self.__rlock = RLock()
 
     def put(self, key, item):
-        """ Assign the item to the dictionary """
-        if key and item:
-            if (len(self.queue) >= self.MAX_ITEMS and
-                    not self.cache_data.get(key)):
-                delete = self.queue.pop(0)
-                self.lfu.pop(delete)
-                self.cache_data.pop(delete)
-                print('DISCARD: {}'.format(delete))
-
-            if self.cache_data.get(key):
-                self.queue.remove(key)
-                self.lfu[key] += 1
-            else:
-                self.lfu[key] = 0
-
-            insert_index = 0
-            while (insert_index < len(self.queue) and
-                   not self.lfu[self.queue[insert_index]]):
-                insert_index += 1
-            self.queue.insert(insert_index, key)
-            self.cache_data[key] = item
+        """ Add an item in the cache
+        """
+        if key is not None and item is not None:
+            keyOut = self._balance(key)
+            with self.__rlock:
+                self.cache_data.update({key: item})
+            if keyOut is not None:
+                print('DISCARD: {}'.format(keyOut))
 
     def get(self, key):
-        """ Return the value associated with the given key """
-        if self.cache_data.get(key):
-            self.lfu[key] += 1
-            if self.queue.index(key) + 1 != len(self.queue):
-                while (self.queue.index(key) + 1 < len(self.queue) and
-                       self.lfu[key] >=
-                       self.lfu[self.queue[self.queue.index(key) + 1]]):
-                    self.queue.insert(self.queue.index(key) + 1,
-                                      self.queue.pop(self.queue.index(key)))
-        return self.cache_data.get(key)
+        """ Get an item by key
+        """
+        with self.__rlock:
+            value = self.cache_data.get(key, None)
+            if key in self.__stats:
+                self.__stats[key] += 1
+        return value
+
+    def _balance(self, keyIn):
+        """ Removes the earliest item from the cache at MAX size
+        """
+        keyOut = None
+        with self.__rlock:
+            if keyIn not in self.__stats:
+                if len(self.cache_data) == BaseCaching.MAX_ITEMS:
+                    keyOut = min(self.__stats, key=self.__stats.get)
+                    self.cache_data.pop(keyOut)
+                    self.__stats.pop(keyOut)
+            self.__stats[keyIn] = self.__stats.get(keyIn, 0) + 1
+        return keyOut
